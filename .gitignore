@@ -1,0 +1,38 @@
+# Ignore all files by default to prevent accidental uploads of original game assets
+*
+
+# Allow directories to be scanned
+!*/
+
+# Allow foundational repo files
+!.gitignore
+!.gitattributes
+!README.md
+!LICENSE
+
+# === Whitelisted Mod Files ===
+!game/build.rpy
+!game/01-py3-compat.rpy
+!game/script.rpy
+!game/splash.rpy
+!game/zz_credits.rpy
+!game/zz_debug.rpy
+!game/effects.rpy
+
+# === Explicitly block original assets and compiled files (Double Safety) ===
+*.rpyc
+*.rpa
+*.bak
+*~
+
+# Exclude caches, saves, and runtime generated files
+/game/cache/
+/game/saves/
+/game/python-packages/
+/game/firstrun
+/log.txt
+/traceback.txt
+/errors.txt
+
+# Exclude debug/testing scripts
+test_*.py
