@@ -2,6 +2,8 @@ init python:
     import datetime
     import math
 
+    CREDITS_WIPE_WIDTH = 1280.0
+
     def _credits_music_elapsed(base=0.0, channel="music"):
         try:
             pos = renpy.music.get_pos(channel)
@@ -45,11 +47,12 @@ init python:
             renpy.pause(min(delay, 0.25), hard=True)
 
     class MusicSyncedCreditText(renpy.Displayable):
-        def __init__(self, text, start, duration, style="monika_credits_text", base=0.0, channel="music"):
+        def __init__(self, text, start, duration, screen_x, style="monika_credits_text", base=0.0, channel="music"):
             super(MusicSyncedCreditText, self).__init__()
             self.child = Text(text, style=style)
             self.start = float(start)
             self.duration = max(float(duration), 0.001)
+            self.screen_x = float(screen_x)
             self.base = float(base)
             self.channel = channel
             self._cached_size = None
@@ -65,9 +68,9 @@ init python:
 
         def render(self, width, height, st, at):
             elapsed = self._elapsed(st)
-            progress = (elapsed - self.start) / self.duration
+            raw_progress = (elapsed - self.start) / self.duration
 
-            if progress <= 0.0 and self._cached_size is not None:
+            if raw_progress <= 0.0 and self._cached_size is not None:
                 rv = renpy.Render(self._cached_size[0], self._cached_size[1])
                 renpy.redraw(self, min(max(self.start - elapsed, 0.0), 0.05))
                 return rv
@@ -76,14 +79,17 @@ init python:
             self._cached_size = (child_render.width, child_render.height)
             rv = renpy.Render(child_render.width, child_render.height)
 
-            if progress <= 0.0:
+            if raw_progress <= 0.0:
                 renpy.redraw(self, min(max(self.start - elapsed, 0.0), 0.05))
                 return rv
 
+            progress = max(0.0, min(1.0, raw_progress))
+
             if progress < 1.0:
-                reveal_width = int(math.ceil(child_render.width * progress))
-                reveal_width = max(1, min(child_render.width, reveal_width))
-                rv.blit(child_render.subsurface((0, 0, reveal_width, child_render.height)), (0, 0))
+                edge_x = self.screen_x + CREDITS_WIPE_WIDTH * progress
+                visible_width = int(math.ceil(edge_x - self.screen_x))
+                visible_width = max(1, min(child_render.width, visible_width))
+                rv.blit(child_render.subsurface((0, 0, visible_width, child_render.height)), (0, 0))
                 renpy.redraw(self, 0)
             else:
                 rv.blit(child_render, (0, 0))
@@ -378,55 +384,55 @@ define credits_ypos = 250
 image mcredits_1a:
     ypos credits_ypos
     xoffset -205
-    MusicSyncedCreditText("Every day,", 10.33, 13.0)
+    MusicSyncedCreditText("Every day,", 10.33, 13.0, screen_x=435)
 image mcredits_1b:
     ypos credits_ypos
     xoffset -35
-    MusicSyncedCreditText("I imagine a future where", 11.75, 12.0)
+    MusicSyncedCreditText("I imagine a future where", 11.75, 12.0, screen_x=605)
 image mcredits_1c:
     ypos credits_ypos
     xoffset 170
-    MusicSyncedCreditText("I can be with you", 13.76, 15.0)
+    MusicSyncedCreditText("I can be with you", 13.76, 15.0, screen_x=810)
 image mcredits_2a:
     ypos credits_ypos + 50
     xoffset -226
-    MusicSyncedCreditText("In my hand", 19.45, 13.0)
+    MusicSyncedCreditText("In my hand", 19.45, 13.0, screen_x=414)
 image mcredits_2b:
     ypos credits_ypos + 50
     xoffset -10
-    MusicSyncedCreditText(" is a pen that will write a poem", 20.9, 9.0)
+    MusicSyncedCreditText(" is a pen that will write a poem", 20.9, 9.0, screen_x=630)
 image mcredits_2c:
     ypos credits_ypos + 50
     xoffset 225
-    MusicSyncedCreditText("of me and you", 23.27, 15.0)
+    MusicSyncedCreditText("of me and you", 23.27, 15.0, screen_x=865)
 
 image mcredits_3:
     ypos credits_ypos + 100
-    MusicSyncedCreditText("The ink flows down into a dark puddle", 28.35, 16.0)
+    MusicSyncedCreditText("The ink flows down into a dark puddle", 28.35, 16.0, screen_x=640)
 
 image mcredits_4:
     ypos credits_ypos + 150
     xoffset -5
-    MusicSyncedCreditText(" Just move your hand -- write the way into his heart!", 32.9, 9.0)
+    MusicSyncedCreditText(" Just move your hand -- write the way into his heart!", 32.9, 9.0, screen_x=635)
 
 image mcredits_5:
     ypos credits_ypos + 200
-    MusicSyncedCreditText("But in this world of infinite choices", 37.5, 16.0)
+    MusicSyncedCreditText("But in this world of infinite choices", 37.5, 16.0, screen_x=640)
 
 image mcredits_6a:
     ypos credits_ypos + 250
     xoffset -145
-    MusicSyncedCreditText(" What will it take", 42.0, 10.0)
+    MusicSyncedCreditText(" What will it take", 42.0, 10.0, screen_x=495)
 image mcredits_6b:
     ypos credits_ypos + 250
     xoffset 85
-    MusicSyncedCreditText(" just to find that special day?", 43.47, 10.0)
+    MusicSyncedCreditText(" just to find that special day?", 43.47, 10.0, screen_x=725)
 
 image mcredits_7 = MusicSyncedBlackFade(48.62, 1.5)
 
 image mcredits_1_test:
     ypos credits_ypos + 300
-    MusicSyncedCreditText("What will it take just to find that special day?", 0.0, 15.0)
+    MusicSyncedCreditText("What will it take just to find that special day?", 0.0, 15.0, screen_x=640)
 
 image end_glitch1:
     "bg/end-glitch1.jpg"
