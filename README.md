@@ -30,9 +30,9 @@ Upgrading the core engine from Ren'Py 6 (Python 2) to Ren'Py 8 (Python 3) unlock
    - Adapted built-in legacy functions for effects matching Ren'Py 8 constraints.
    - Includes developer utilities and structural modifications to the end credits sequence.
 
-## ⚠️ Known Issues
+## ✅ Resolved Issues
 
-- **Credits Text Stutter**: Currently, during the credit sequence at the end of the game (Act 4), the scrolling text suffers from noticeable frame drops and stuttering. We are still investigating and optimizing caching methods to address this issue caused by the engine migration.
+- **Credits Text Stutter**: Fixed the end credits text rendering issue by replacing the legacy image-dissolve path with a Ren'Py 8-compatible music-synced text wipe.
 
 ## 💾 Installation Guide
 
