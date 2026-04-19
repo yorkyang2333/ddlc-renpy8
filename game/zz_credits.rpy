@@ -1,8 +1,13 @@
 init python:
     import datetime
-    import math
 
-    CREDITS_WIPE_WIDTH = 1280.0
+    CREDITS_DISSOLVE_RAMPLEN = 4
+    CREDITS_WIPE_MATRIX = renpy.display.matrix.Matrix([
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        1, 0, 0, 0,
+    ])
 
     def _credits_music_elapsed(base=0.0, channel="music"):
         try:
@@ -47,18 +52,18 @@ init python:
             renpy.pause(min(delay, 0.25), hard=True)
 
     class MusicSyncedCreditText(renpy.Displayable):
-        def __init__(self, text, start, duration, screen_x, style="monika_credits_text", base=0.0, channel="music"):
+        def __init__(self, text, start, duration, style="monika_credits_text", base=0.0, channel="music"):
             super(MusicSyncedCreditText, self).__init__()
             self.child = Text(text, style=style)
+            self.mask = renpy.display.motion.Transform("images/menu/wipeleft.png", matrixcolor=CREDITS_WIPE_MATRIX)
             self.start = float(start)
             self.duration = max(float(duration), 0.001)
-            self.screen_x = float(screen_x)
             self.base = float(base)
             self.channel = channel
             self._cached_size = None
 
         def visit(self):
-            return [self.child]
+            return [self.child, self.mask]
 
         def _elapsed(self, st):
             elapsed = _credits_music_elapsed(base=self.base, channel=self.channel)
@@ -85,14 +90,38 @@ init python:
 
             progress = max(0.0, min(1.0, raw_progress))
 
-            if progress < 1.0:
-                edge_x = self.screen_x + CREDITS_WIPE_WIDTH * progress
-                visible_width = int(math.ceil(edge_x - self.screen_x))
-                visible_width = max(1, min(child_render.width, visible_width))
-                rv.blit(child_render.subsurface((0, 0, visible_width, child_render.height)), (0, 0))
-                renpy.redraw(self, 0)
-            else:
+            if progress >= 1.0:
                 rv.blit(child_render, (0, 0))
+                return rv
+
+            mask_render = renpy.render(self.mask, child_render.width, child_render.height, st, at)
+            bottom_render = renpy.Render(child_render.width, child_render.height)
+            bottom_render.fill((0, 0, 0, 255))
+
+            rv.operation = renpy.display.render.IMAGEDISSOLVE
+            rv.operation_alpha = False
+            rv.operation_complete = progress
+            rv.operation_parameter = CREDITS_DISSOLVE_RAMPLEN
+
+            if renpy.display.render.models:
+                target = rv.get_size()
+
+                if mask_render.get_size() != target:
+                    mask_render = mask_render.subsurface((0, 0, child_render.width, child_render.height))
+
+                ramp = CREDITS_DISSOLVE_RAMPLEN
+                offset = -1.0 + ((ramp / 256.0) + 1.0) * progress
+
+                rv.mesh = True
+                rv.add_shader("renpy.imagedissolve")
+                rv.add_uniform("u_renpy_dissolve_offset", offset)
+                rv.add_uniform("u_renpy_dissolve_multiplier", 256.0 / ramp)
+
+            rv.blit(mask_render, (0, 0), focus=False, main=False)
+            rv.blit(bottom_render, (0, 0), focus=False, main=False)
+            rv.blit(child_render, (0, 0), focus=True, main=True)
+            if progress < 1.0:
+                renpy.redraw(self, 0)
 
             return rv
 
@@ -384,55 +413,55 @@ define credits_ypos = 250
 image mcredits_1a:
     ypos credits_ypos
     xoffset -205
-    MusicSyncedCreditText("Every day,", 10.33, 13.0, screen_x=435)
+    MusicSyncedCreditText("Every day,", 10.33, 13.0)
 image mcredits_1b:
     ypos credits_ypos
     xoffset -35
-    MusicSyncedCreditText("I imagine a future where", 11.75, 12.0, screen_x=605)
+    MusicSyncedCreditText("I imagine a future where", 11.75, 12.0)
 image mcredits_1c:
     ypos credits_ypos
     xoffset 170
-    MusicSyncedCreditText("I can be with you", 13.76, 15.0, screen_x=810)
+    MusicSyncedCreditText("I can be with you", 13.76, 15.0)
 image mcredits_2a:
     ypos credits_ypos + 50
     xoffset -226
-    MusicSyncedCreditText("In my hand", 19.45, 13.0, screen_x=414)
+    MusicSyncedCreditText("In my hand", 19.45, 13.0)
 image mcredits_2b:
     ypos credits_ypos + 50
     xoffset -10
-    MusicSyncedCreditText(" is a pen that will write a poem", 20.9, 9.0, screen_x=630)
+    MusicSyncedCreditText(" is a pen that will write a poem", 20.9, 9.0)
 image mcredits_2c:
     ypos credits_ypos + 50
     xoffset 225
-    MusicSyncedCreditText("of me and you", 23.27, 15.0, screen_x=865)
+    MusicSyncedCreditText("of me and you", 23.27, 15.0)
 
 image mcredits_3:
     ypos credits_ypos + 100
-    MusicSyncedCreditText("The ink flows down into a dark puddle", 28.35, 16.0, screen_x=640)
+    MusicSyncedCreditText("The ink flows down into a dark puddle", 28.35, 16.0)
 
 image mcredits_4:
     ypos credits_ypos + 150
     xoffset -5
-    MusicSyncedCreditText(" Just move your hand -- write the way into his heart!", 32.9, 9.0, screen_x=635)
+    MusicSyncedCreditText(" Just move your hand -- write the way into his heart!", 32.9, 9.0)
 
 image mcredits_5:
     ypos credits_ypos + 200
-    MusicSyncedCreditText("But in this world of infinite choices", 37.5, 16.0, screen_x=640)
+    MusicSyncedCreditText("But in this world of infinite choices", 37.5, 16.0)
 
 image mcredits_6a:
     ypos credits_ypos + 250
     xoffset -145
-    MusicSyncedCreditText(" What will it take", 42.0, 10.0, screen_x=495)
+    MusicSyncedCreditText(" What will it take", 42.0, 10.0)
 image mcredits_6b:
     ypos credits_ypos + 250
     xoffset 85
-    MusicSyncedCreditText(" just to find that special day?", 43.47, 10.0, screen_x=725)
+    MusicSyncedCreditText(" just to find that special day?", 43.47, 10.0)
 
 image mcredits_7 = MusicSyncedBlackFade(48.62, 1.5)
 
 image mcredits_1_test:
     ypos credits_ypos + 300
-    MusicSyncedCreditText("What will it take just to find that special day?", 0.0, 15.0, screen_x=640)
+    MusicSyncedCreditText("What will it take just to find that special day?", 0.0, 15.0)
 
 image end_glitch1:
     "bg/end-glitch1.jpg"
