@@ -1,5 +1,126 @@
 init python:
     import datetime
+    import math
+
+    def _credits_music_elapsed(base=0.0, channel="music"):
+        try:
+            pos = renpy.music.get_pos(channel)
+        except Exception:
+            pos = None
+
+        if pos is None:
+            return None
+
+        # Some backends report the absolute file position for "<from 50.0>",
+        # while others report segment-local time. Support both.
+        if base and pos >= base - 5.0:
+            return max(0.0, pos - base)
+
+        return max(0.0, pos)
+
+    def _credits_wall_elapsed(fallback_start):
+        if fallback_start is None:
+            return None
+
+        return (datetime.datetime.now() - fallback_start).total_seconds()
+
+    def pause_until_music_relative(relative_target, base=0.0, fallback_start=None, channel="music"):
+        if fallback_start is None:
+            fallback_start = datetime.datetime.now()
+
+        while True:
+            elapsed = _credits_music_elapsed(base=base, channel=channel)
+
+            if elapsed is None:
+                elapsed = _credits_wall_elapsed(fallback_start)
+
+            if elapsed is None:
+                delay = relative_target
+            else:
+                delay = relative_target - elapsed
+
+            if delay <= 0:
+                return
+
+            renpy.pause(min(delay, 0.25), hard=True)
+
+    class MusicSyncedCreditText(renpy.Displayable):
+        def __init__(self, text, start, duration, style="monika_credits_text", base=0.0, channel="music"):
+            super(MusicSyncedCreditText, self).__init__()
+            self.child = Text(text, style=style)
+            self.start = float(start)
+            self.duration = max(float(duration), 0.001)
+            self.base = float(base)
+            self.channel = channel
+            self._cached_size = None
+
+        def visit(self):
+            return [self.child]
+
+        def _elapsed(self, st):
+            elapsed = _credits_music_elapsed(base=self.base, channel=self.channel)
+            if elapsed is None:
+                elapsed = st
+            return elapsed
+
+        def render(self, width, height, st, at):
+            elapsed = self._elapsed(st)
+            progress = (elapsed - self.start) / self.duration
+
+            if progress <= 0.0 and self._cached_size is not None:
+                rv = renpy.Render(self._cached_size[0], self._cached_size[1])
+                renpy.redraw(self, min(max(self.start - elapsed, 0.0), 0.05))
+                return rv
+
+            child_render = renpy.render(self.child, width, height, st, at)
+            self._cached_size = (child_render.width, child_render.height)
+            rv = renpy.Render(child_render.width, child_render.height)
+
+            if progress <= 0.0:
+                renpy.redraw(self, min(max(self.start - elapsed, 0.0), 0.05))
+                return rv
+
+            if progress < 1.0:
+                reveal_width = int(math.ceil(child_render.width * progress))
+                reveal_width = max(1, min(child_render.width, reveal_width))
+                rv.blit(child_render.subsurface((0, 0, reveal_width, child_render.height)), (0, 0))
+                renpy.redraw(self, 0)
+            else:
+                rv.blit(child_render, (0, 0))
+
+            return rv
+
+    class MusicSyncedBlackFade(renpy.Displayable):
+        def __init__(self, start, duration, base=0.0, channel="music", size=(1280, 720)):
+            super(MusicSyncedBlackFade, self).__init__()
+            self.start = float(start)
+            self.duration = max(float(duration), 0.001)
+            self.base = float(base)
+            self.channel = channel
+            self.size = size
+
+        def _elapsed(self, st):
+            elapsed = _credits_music_elapsed(base=self.base, channel=self.channel)
+            if elapsed is None:
+                elapsed = st
+            return elapsed
+
+        def render(self, width, height, st, at):
+            rv = renpy.Render(self.size[0], self.size[1])
+            elapsed = self._elapsed(st)
+            progress = (elapsed - self.start) / self.duration
+
+            if progress <= 0.0:
+                renpy.redraw(self, min(max(self.start - elapsed, 0.0), 0.05))
+                return rv
+
+            alpha = max(0.0, min(1.0, progress))
+            rv.fill((0, 0, 0, int(255 * alpha)))
+
+            if progress < 1.0:
+                renpy.redraw(self, 0)
+
+            return rv
 
 image credits_cg1:
     "images/cg/credits/1.png"
@@ -257,81 +378,55 @@ define credits_ypos = 250
 image mcredits_1a:
     ypos credits_ypos
     xoffset -205
-    Transform(Text("Every day,", style="monika_credits_text"), alpha=0.0)
-    10.33
-    Text("Every day,", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 13.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("Every day,", 10.33, 13.0)
 image mcredits_1b:
     ypos credits_ypos
     xoffset -35
-    Transform(Text("I imagine a future where", style="monika_credits_text"), alpha=0.0)
-    11.75
-    Text("I imagine a future where", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 12.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("I imagine a future where", 11.75, 12.0)
 image mcredits_1c:
     ypos credits_ypos
     xoffset 170
-    Transform(Text("I can be with you", style="monika_credits_text"), alpha=0.0)
-    13.76
-    Text("I can be with you", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 15.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("I can be with you", 13.76, 15.0)
 image mcredits_2a:
     ypos credits_ypos + 50
     xoffset -226
-    Transform(Text("In my hand", style="monika_credits_text"), alpha=0.0)
-    19.45
-    Text("In my hand", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 13.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("In my hand", 19.45, 13.0)
 image mcredits_2b:
     ypos credits_ypos + 50
     xoffset -10
-    Transform(Text(" is a pen that will write a poem", style="monika_credits_text"), alpha=0.0)
-    20.9
-    Text(" is a pen that will write a poem", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 9.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText(" is a pen that will write a poem", 20.9, 9.0)
 image mcredits_2c:
     ypos credits_ypos + 50
     xoffset 225
-    Transform(Text("of me and you", style="monika_credits_text"), alpha=0.0)
-    23.27
-    Text("of me and you", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 15.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("of me and you", 23.27, 15.0)
 
 image mcredits_3:
     ypos credits_ypos + 100
-    Transform(Text("The ink flows down into a dark puddle", style="monika_credits_text"), alpha=0.0)
-    28.35
-    Text("The ink flows down into a dark puddle", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 16.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("The ink flows down into a dark puddle", 28.35, 16.0)
 
 image mcredits_4:
     ypos credits_ypos + 150
     xoffset -5
-    Transform(Text(" Just move your hand -- write the way into his heart!", style="monika_credits_text"), alpha=0.0)
-    32.9
-    Text(" Just move your hand -- write the way into his heart!", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 9.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText(" Just move your hand -- write the way into his heart!", 32.9, 9.0)
 
 image mcredits_5:
     ypos credits_ypos + 200
-    Transform(Text("But in this world of infinite choices", style="monika_credits_text"), alpha=0.0)
-    37.5
-    Text("But in this world of infinite choices", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 16.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText("But in this world of infinite choices", 37.5, 16.0)
 
 image mcredits_6a:
     ypos credits_ypos + 250
     xoffset -145
-    Transform(Text(" What will it take", style="monika_credits_text"), alpha=0.0)
-    42.0
-    Text(" What will it take", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 10.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText(" What will it take", 42.0, 10.0)
 image mcredits_6b:
     ypos credits_ypos + 250
     xoffset 85
-    Transform(Text(" just to find that special day?", style="monika_credits_text"), alpha=0.0)
-    43.47
-    Text(" just to find that special day?", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 10.0, ramplen=4, alpha=True)
+    MusicSyncedCreditText(" just to find that special day?", 43.47, 10.0)
 
-image mcredits_7:
-    "black"
-    alpha 0.0
-    48.62
-    linear 1.5 alpha 1.0
+image mcredits_7 = MusicSyncedBlackFade(48.62, 1.5)
 
 image mcredits_1_test:
     ypos credits_ypos + 300
-    Text("What will it take just to find that special day?", style="monika_credits_text") with ImageDissolve("images/menu/wipeleft.png", 15.0, ramplen=4)
+    MusicSyncedCreditText("What will it take just to find that special day?", 0.0, 15.0)
 
 image end_glitch1:
     "bg/end-glitch1.jpg"
@@ -447,6 +542,7 @@ label my_credits:
     call updateconsole ("renpy.music.play(\"ddlc.ogg\")", "Playing audio \"ddlc.ogg\"...")
     pause 1.0
     call hideconsole
+    $ credits_music_fallback_start = datetime.datetime.now()
     play music "<to 50.0>bgm/credits.ogg" noloop
     show mcredits_1a zorder 50
     show mcredits_1b zorder 49
@@ -461,7 +557,7 @@ label my_credits:
     show mcredits_6b zorder 40
     show mcredits_7 zorder 51
 
-    pause 50
+    $ pause_until_music_relative(50.0, fallback_start=credits_music_fallback_start)
     jump my_credits2
 
 label my_credits2:
@@ -485,11 +581,11 @@ label my_credits2:
         imagenum = 0
     scene black
     $ consolehistory = []
+    $ credits2_music_fallback_start = datetime.datetime.now()
     play music "<from 50.0>bgm/credits.ogg" noloop
-    $ starttime = datetime.datetime.now()
-    pause 0.88
+    $ pause_until_music_relative(0.88, base=50.0, fallback_start=credits2_music_fallback_start)
     show credits_logo
-    pause 9.12
+    $ pause_until_music_relative(10.00, base=50.0, fallback_start=credits2_music_fallback_start)
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
@@ -499,7 +595,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(16.95 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(16.95, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/n_cg1.png\")", "n_cg1.png deleted successfully.")
     else:
@@ -510,7 +606,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(26.05 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(26.05, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/n_cg2.png\")", "n_cg2.png deleted successfully.")
     else:
@@ -521,7 +617,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(35.15 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(35.15, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/y_cg1.png\")", "y_cg1.png deleted successfully.")
     else:
@@ -532,7 +628,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(44.25 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(44.25, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/y_cg2.png\")", "y_cg2.png deleted successfully.")
     else:
@@ -543,7 +639,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(53.35 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(53.35, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/n_cg3.png\")", "n_cg3.png deleted successfully.")
     else:
@@ -554,7 +650,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(62.45 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(62.45, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/y_cg3.png\")", "y_cg3.png deleted successfully.")
     else:
@@ -565,7 +661,7 @@ label my_credits2:
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
-    $ pause(71.55 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(71.55, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/s_cg1.png\")", "s_cg1.png deleted successfully.")
     else:
@@ -577,7 +673,7 @@ label my_credits2:
     show n_sticker at credits_sticker_2
     show y_sticker at credits_sticker_3
     show m_sticker at credits_sticker_4
-    $ pause(80.60 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(80.60, base=50.0, fallback_start=credits2_music_fallback_start)
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
     $ imagenum += 1
@@ -585,13 +681,13 @@ label my_credits2:
         call updateconsole ("os.remove(\"images/cg/s_cg2.png\")", "s_cg2.png deleted successfully.")
     else:
         call updateconsole_clearall ("os.remove(\"images/cg/s_cg2.png\")", "s_cg2.png deleted successfully.")
-    $ pause(88.00 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(88.00, base=50.0, fallback_start=credits2_music_fallback_start)
     show expression ("credits_cg9" + lockedtext) as credits_image_1 at credits_scroll_right
     show credits_header "Special Thanks" as credits_header_1 at credits_text_scroll_left
     show credits_text "Alecia Bardachino\nMatt Naples" as credits_text_1 at credits_text_scroll_left
     $ lockedtext = "" if persistent.clear[imagenum] else "_locked"
     $ if persistent.clearall: lockedtext = "_clearall"
-    $ pause(95.00 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(95.00, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/s_cg3.png\")", "s_cg3.png deleted successfully.")
     else:
@@ -599,7 +695,7 @@ label my_credits2:
     show expression ("credits_cg10" + lockedtext) as credits_image_2 at credits_scroll_left
     show credits_header "Special Thanks" as credits_header_2 at credits_text_scroll_right
     show credits_text "Monika\n[player]" as credits_text_2 at credits_text_scroll_right
-    $ pause(104.10 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(104.10, base=50.0, fallback_start=credits2_music_fallback_start)
     if not persistent.clearall:
         call updateconsole ("os.remove(\"images/cg/m_cg1.png\")", "m_cg1.png deleted successfully.")
     else:
@@ -609,7 +705,7 @@ label my_credits2:
     call updateconsole ("os.remove(\"game/gui.rpy\")", "gui.rpy deleted successfully.")
     call updateconsole ("os.remove(\"game/menu.rpy\")", "menu.rpy deleted successfully.")
     call updateconsole ("os.remove(\"game/script.rpy\")", "script.rpy deleted successfully.")
-    $ pause(115.72 - (datetime.datetime.now() - starttime).total_seconds())
+    $ pause_until_music_relative(115.72, base=50.0, fallback_start=credits2_music_fallback_start)
     call hideconsole
     show credits_ts
     show credits_text "made with love by":
