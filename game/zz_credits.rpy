@@ -1,13 +1,9 @@
 init python:
     import datetime
+    import math
 
-    CREDITS_DISSOLVE_RAMPLEN = 4
-    CREDITS_WIPE_MATRIX = renpy.display.matrix.Matrix([
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        1, 0, 0, 0,
-    ])
+    CREDITS_WIPE_WIDTH = 1280.0
+    CREDITS_WIPE_FEATHER = 32
 
     def _credits_music_elapsed(base=0.0, channel="music"):
         try:
@@ -55,7 +51,6 @@ init python:
         def __init__(self, text, start, duration, style="monika_credits_text", base=0.0, channel="music"):
             super(MusicSyncedCreditText, self).__init__()
             self.child = Text(text, style=style)
-            self.mask = renpy.display.motion.Transform("images/menu/wipeleft.png", matrixcolor=CREDITS_WIPE_MATRIX)
             self.start = float(start)
             self.duration = max(float(duration), 0.001)
             self.base = float(base)
@@ -63,7 +58,7 @@ init python:
             self._cached_size = None
 
         def visit(self):
-            return [self.child, self.mask]
+            return [self.child]
 
         def _elapsed(self, st):
             elapsed = _credits_music_elapsed(base=self.base, channel=self.channel)
@@ -94,34 +89,27 @@ init python:
                 rv.blit(child_render, (0, 0))
                 return rv
 
-            mask_render = renpy.render(self.mask, child_render.width, child_render.height, st, at)
-            bottom_render = renpy.Render(child_render.width, child_render.height)
-            bottom_render.fill((0, 0, 0, 255))
+            edge = CREDITS_WIPE_WIDTH * progress
+            solid_width = int(max(0, min(child_render.width, math.floor(edge))))
 
-            rv.operation = renpy.display.render.IMAGEDISSOLVE
-            rv.operation_alpha = False
-            rv.operation_complete = progress
-            rv.operation_parameter = CREDITS_DISSOLVE_RAMPLEN
+            if solid_width:
+                rv.blit(child_render.subsurface((0, 0, solid_width, child_render.height)), (0, 0))
 
-            if renpy.display.render.models:
-                target = rv.get_size()
+            feather_start = solid_width
+            feather_width = int(max(0, min(CREDITS_WIPE_FEATHER, child_render.width - feather_start)))
 
-                if mask_render.get_size() != target:
-                    mask_render = mask_render.subsurface((0, 0, child_render.width, child_render.height))
+            if feather_width > 0:
+                for x in range(feather_width):
+                    alpha = 1.0 - (float(x + 1) / float(CREDITS_WIPE_FEATHER + 1))
+                    strip = renpy.Render(1, child_render.height)
+                    strip.blit(child_render.subsurface((feather_start + x, 0, 1, child_render.height)), (0, 0))
+                    strip.alpha = alpha
+                    strip.add_shader("renpy.alpha")
+                    strip.add_uniform("u_renpy_alpha", alpha)
+                    strip.add_uniform("u_renpy_over", 1.0)
+                    rv.blit(strip, (feather_start + x, 0))
 
-                ramp = CREDITS_DISSOLVE_RAMPLEN
-                offset = -1.0 + ((ramp / 256.0) + 1.0) * progress
-
-                rv.mesh = True
-                rv.add_shader("renpy.imagedissolve")
-                rv.add_uniform("u_renpy_dissolve_offset", offset)
-                rv.add_uniform("u_renpy_dissolve_multiplier", 256.0 / ramp)
-
-            rv.blit(mask_render, (0, 0), focus=False, main=False)
-            rv.blit(bottom_render, (0, 0), focus=False, main=False)
-            rv.blit(child_render, (0, 0), focus=True, main=True)
-            if progress < 1.0:
-                renpy.redraw(self, 0)
+            renpy.redraw(self, 0)
 
             return rv
 
